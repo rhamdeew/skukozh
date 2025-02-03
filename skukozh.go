@@ -9,16 +9,25 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 var (
 	extFlag = flag.String("ext", "", "Comma-separated list of file extensions (e.g., 'php,js,ts')")
+	countFlag = flag.Int("count", 20, "Number of largest files to show in analyze command")
 )
 
 const usage = `Usage: 
   skukozh [-ext 'ext1,ext2,...'] find <directory>  - Find files and create file list
   skukozh gen <directory>                          - Generate content file from file list
+  skukozh [-count N] analyze                       - Analyze the result file (default top 20 files)
 `
+
+type FileInfo struct {
+	path    string
+	size    int64
+	symbols int
+}
 
 func main() {
 	// Support both -ext and --ext
@@ -62,6 +71,13 @@ func main() {
 		directory := args[1]
 		generateContentFile(directory)
 	
+	case "analyze":
+		if len(args) != 1 {
+			fmt.Print(usage)
+			os.Exit(1)
+		}
+		analyzeResultFile(*countFlag)
+
 	default:
 		fmt.Print(usage)
 		os.Exit(1)
@@ -138,16 +154,16 @@ func generateContentFile(baseDir string) {
 
 		// Write file section with original path
 		ext := filepath.Ext(file)
-		output.WriteString(fmt.Sprintf("### FILE: %s\n", file))
-		output.WriteString(fmt.Sprintf("### TYPE: %s\n", strings.TrimPrefix(ext, ".")))
-		output.WriteString("### CONTENT START ###\n")
+		output.WriteString(fmt.Sprintf("#FILE %s\n", file))
+		output.WriteString(fmt.Sprintf("#TYPE %s\n", strings.TrimPrefix(ext, ".")))
+		output.WriteString("#START\n")
 		output.WriteString("```" + strings.TrimPrefix(ext, ".") + "\n")
 		output.Write(fileContent)
 		if !bytes.HasSuffix(fileContent, []byte("\n")) {
 			output.WriteString("\n")
 		}
 		output.WriteString("```\n")
-		output.WriteString("### CONTENT END ###\n\n")
+		output.WriteString("#END\n\n")
 	}
 
 	// Write result file
@@ -158,6 +174,128 @@ func generateContentFile(baseDir string) {
 	}
 
 	fmt.Println("Content file saved to skukozh_result.txt")
+}
+
+func analyzeResultFile(topCount int) {
+	content, err := ioutil.ReadFile("skukozh_result.txt")
+	if err != nil {
+		fmt.Printf("Error reading result file: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Calculate total file size
+	fileSize := float64(len(content)) / (1024 * 1024) // Convert to MB
+	
+	// Count total symbols (excluding whitespace)
+	symbols := 0
+	for _, r := range string(content) {
+		if !unicode.IsSpace(r) {
+			symbols++
+		}
+	}
+
+	// Parse file sections and collect information
+	sections := strings.Split(string(content), "#FILE ")
+	var files []FileInfo
+
+	for _, section := range sections[1:] { // Skip first empty section
+		lines := strings.Split(section, "\n")
+		if len(lines) < 1 {
+			continue
+		}
+
+		filePath := strings.TrimSpace(lines[0])
+
+		// Find content between START and END markers
+		startMarker := "#START\n```"
+		endMarker := "```\n#END"
+		
+		startIdx := strings.Index(section, startMarker)
+		if startIdx == -1 {
+			continue
+		}
+		startIdx += len(startMarker)
+		
+		// Find the language identifier line
+		nextNewline := strings.Index(section[startIdx:], "\n")
+		if nextNewline == -1 {
+			continue
+		}
+		startIdx += nextNewline + 1
+		
+		endIdx := strings.Index(section[startIdx:], endMarker)
+		if endIdx == -1 {
+			continue
+		}
+
+		fileContent := section[startIdx : startIdx+endIdx]
+		symbolCount := 0
+		for _, r := range fileContent {
+			if !unicode.IsSpace(r) {
+				symbolCount++
+			}
+		}
+
+		files = append(files, FileInfo{
+			path:    filePath,
+			size:    int64(len(fileContent)),
+			symbols: symbolCount,
+		})
+	}
+
+	// Sort files by size
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].size > files[j].size
+	})
+
+	// Find the longest file path for formatting
+	maxPathLen := 0
+	for _, file := range files {
+		if len(file.path) > maxPathLen {
+			maxPathLen = len(file.path)
+		}
+	}
+	// Ensure minimum width and add padding
+	if maxPathLen < 50 {
+		maxPathLen = 50
+	}
+	maxPathLen += 2 // Add some padding
+
+	// Print header
+	fmt.Printf("\nAnalysis Report\n")
+	fmt.Printf("==============\n\n")
+	fmt.Printf("Total file size: %.2f MB\n", fileSize)
+	fmt.Printf("Total symbols: %d\n\n", symbols)
+
+	if len(files) == 0 {
+		fmt.Println("No files found in the result file.")
+		return
+	}
+	
+	fmt.Printf("Top %d largest files:\n", topCount)
+
+	// Print table header with proper spacing
+	headerFormat := fmt.Sprintf("%%-%ds %%12s %%15s\n", maxPathLen)
+	fmt.Printf(headerFormat, "File", "Size (KB)", "Symbols")
+	
+	// Print separator with proper length
+	fmt.Printf("%s %s %s\n",
+		strings.Repeat("─", maxPathLen),
+		strings.Repeat("─", 12),
+		strings.Repeat("─", 15))
+	
+	// Print file information
+	fileFormat := fmt.Sprintf("%%-%ds %%12.2f %%15d\n", maxPathLen)
+	for i, file := range files {
+		if i >= topCount {
+			break
+		}
+		fmt.Printf(fileFormat,
+			file.path,
+			float64(file.size)/1024,
+			file.symbols)
+	}
+	fmt.Println()
 }
 
 func contains(slice []string, item string) bool {

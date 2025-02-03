@@ -53,14 +53,47 @@ To generate a content file from the file list:
 This will create `skukozh_result.txt` containing the content of all files in a format suitable for AI analysis:
 
 ```
-### FILE: application/index.php
-### TYPE: php
-### CONTENT START ###
+#FILE application/index.php
+#TYPE php
+#START
 ```php
 <?php
 // File content here
 ```
-### CONTENT END ###
+#END
+```
+
+### Analyzing Result File
+
+To analyze the generated content file:
+
+```bash
+# Show default analysis (top 20 largest files)
+./skukozh analyze
+
+# Show top 50 largest files
+./skukozh -count 50 analyze
+```
+
+This will show:
+- Total file size in megabytes
+- Total symbol count (excluding whitespace)
+- List of largest files with their sizes and symbol counts
+
+Example output:
+```
+Analysis Report
+==============
+
+Total file size: 2.45 MB
+Total symbols: 458932
+
+Top 20 largest files:
+File                                                Size (KB)        Symbols
+--------------------------------------------------     ------        -------
+application/models/LargeModel.php                        125.4         24560
+application/controllers/MainController.php                98.2         18340
+...
 ```
 
 ## Output Format
@@ -79,7 +112,7 @@ Special thanks to Claude.ai for assistance in developing this tool and optimizin
 
 ## License
 
-[Your chosen license]
+MIT
 
 ## Contributing
 
