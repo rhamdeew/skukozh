@@ -1,0 +1,21 @@
+# Binary
+skukozh
+
+# Generated files
+skukozh_file_list.txt
+skukozh_result.txt
+
+# Go binary, test cache
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
