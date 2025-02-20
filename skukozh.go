@@ -13,14 +13,15 @@ import (
 )
 
 var (
-	extFlag = flag.String("ext", "", "Comma-separated list of file extensions (e.g., 'php,js,ts')")
+	extFlag   = flag.String("ext", "", "Comma-separated list of file extensions (e.g., 'php,js,ts')")
+	shortExt  = flag.String("e", "", "Short form of -ext flag")
 	countFlag = flag.Int("count", 20, "Number of largest files to show in analyze command")
 )
 
 const usage = `Usage: 
-  skukozh [-ext 'ext1,ext2,...'] find <directory>  - Find files and create file list
-  skukozh gen <directory>                          - Generate content file from file list
-  skukozh [-count N] analyze                       - Analyze the result file (default top 20 files)
+  skukozh [-e|-ext 'ext1,ext2,...'] find|f <directory>  - Find files and create file list
+  skukozh gen|g <directory>                             - Generate content file from file list
+  skukozh [-count N] analyze|a                          - Analyze the result file (default top 20 files)
 `
 
 type FileInfo struct {
@@ -40,10 +41,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Parse supported extensions
+	// Parse supported extensions from either -ext or -e flag
 	var supportedExts []string
-	if *extFlag != "" {
-		exts := strings.Split(*extFlag, ",")
+	extValue := *extFlag
+	if *shortExt != "" {
+		extValue = *shortExt
+	}
+	if extValue != "" {
+		exts := strings.Split(extValue, ",")
 		for _, ext := range exts {
 			ext = strings.TrimSpace(ext)
 			if !strings.HasPrefix(ext, ".") {
@@ -55,7 +60,7 @@ func main() {
 
 	command := args[0]
 	switch command {
-	case "find":
+	case "find", "f":
 		if len(args) != 2 {
 			fmt.Print(usage)
 			os.Exit(1)
@@ -63,7 +68,7 @@ func main() {
 		directory := args[1]
 		findFiles(directory, supportedExts)
 	
-	case "gen":
+	case "gen", "g":
 		if len(args) != 2 {
 			fmt.Print(usage)
 			os.Exit(1)
@@ -71,7 +76,7 @@ func main() {
 		directory := args[1]
 		generateContentFile(directory)
 	
-	case "analyze":
+	case "analyze", "a":
 		if len(args) != 1 {
 			fmt.Print(usage)
 			os.Exit(1)
@@ -151,6 +156,16 @@ func generateContentFile(baseDir string) {
 			fmt.Printf("Error reading file %s: %v\n", fullPath, err)
 			continue
 		}
+
+		// Remove blank lines
+		lines := strings.Split(string(fileContent), "\n")
+		var nonEmptyLines []string
+		for _, line := range lines {
+			if strings.TrimSpace(line) != "" {
+				nonEmptyLines = append(nonEmptyLines, line)
+			}
+		}
+		fileContent = []byte(strings.Join(nonEmptyLines, "\n"))
 
 		// Write file section with original path
 		ext := filepath.Ext(file)

@@ -9,6 +9,8 @@ A command-line tool to find and extract content from files in a directory. The t
 - Support for multiple file extensions
 - Clean output format with file paths, types, and content boundaries
 - Preserves original file paths in output
+- Removes blank lines to optimize token usage
+- Supports both long and short command formats
 
 ## Building
 
@@ -30,14 +32,17 @@ go build -o skukozh
 To find files with specific extensions and create a file list:
 
 ```bash
-# Find PHP and JavaScript files
-./skukozh -ext 'php,js' find /path/to/directory
+# Find PHP and JavaScript files (long format)
+./skukozh --ext 'php,js' find /path/to/directory
+
+# Find PHP and JavaScript files (short format)
+./skukozh -e 'php,js' f /path/to/directory
 
 # Find PHP files only
-./skukozh -ext 'php' find /path/to/directory
+./skukozh -e 'php' f /path/to/directory
 
 # Find all files (no extension filter)
-./skukozh find /path/to/directory
+./skukozh f /path/to/directory
 ```
 
 This will create `skukozh_file_list.txt` with relative paths to all matching files.
@@ -47,10 +52,14 @@ This will create `skukozh_file_list.txt` with relative paths to all matching fil
 To generate a content file from the file list:
 
 ```bash
+# Long format
 ./skukozh gen /path/to/directory
+
+# Short format
+./skukozh g /path/to/directory
 ```
 
-This will create `skukozh_result.txt` containing the content of all files in a format suitable for AI analysis:
+This will create `skukozh_result.txt` containing the content of all files in a format suitable for AI analysis, with blank lines removed to optimize token usage:
 
 ```
 #FILE application/index.php
@@ -68,11 +77,16 @@ This will create `skukozh_result.txt` containing the content of all files in a f
 To analyze the generated content file:
 
 ```bash
-# Show default analysis (top 20 largest files)
+# Show default analysis (top 20 largest files) - long format
 ./skukozh analyze
+
+# Show default analysis - short format
+./skukozh a
 
 # Show top 50 largest files
 ./skukozh -count 50 analyze
+# or
+./skukozh -count 50 a
 ```
 
 This will show:
@@ -103,8 +117,18 @@ The generated content file includes:
 - File paths and types
 - Language-specific code blocks
 - Content start/end markers
+- No blank lines (for token efficiency)
 
-This format is optimized for AI models to easily parse and understand the structure of your codebase.
+This format is optimized for AI models to easily parse and understand the structure of your codebase while minimizing token usage.
+
+## Command Reference
+
+Long Format | Short Format | Description
+-----------|--------------|-------------
+`find` | `f` | Find files in directory
+`gen` | `g` | Generate content file
+`analyze` | `a` | Analyze result file
+`--ext` | `-e` | Specify file extensions
 
 ## Special Thanks
 
