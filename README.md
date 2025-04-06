@@ -1,4 +1,4 @@
-# skukozh
+# Skukozh
 
 A command-line tool to find and extract content from files in a directory. The tool is particularly useful for preparing code files for analysis by AI models like Claude or GPT.
 
@@ -11,19 +11,6 @@ A command-line tool to find and extract content from files in a directory. The t
 - Preserves original file paths in output
 - Removes blank lines to optimize token usage
 - Supports both long and short command formats
-
-## Building
-
-Make sure you have Go installed on your system, then:
-
-```bash
-# Clone the repository
-git clone <your-repository-url>
-cd skukozh
-
-# Build the binary
-go build -o skukozh
-```
 
 ## Usage
 
@@ -65,10 +52,10 @@ This will create `skukozh_result.txt` containing the content of all files in a f
 #FILE application/index.php
 #TYPE php
 #START
-```php
+"""php
 <?php
 // File content here
-```
+""""
 #END
 ```
 
@@ -95,6 +82,7 @@ This will show:
 - List of largest files with their sizes and symbol counts
 
 Example output:
+
 ```
 Analysis Report
 ==============
@@ -108,6 +96,46 @@ File                                                Size (KB)        Symbols
 application/models/LargeModel.php                        125.4         24560
 application/controllers/MainController.php                98.2         18340
 ...
+```
+
+## Running Tests
+
+To run all tests:
+```
+go test -v ./...
+```
+
+To run specific tests:
+```
+go test -v -run TestContains
+go test -v -run TestFindFiles
+go test -v -run TestGenerateContentFile
+go test -v -run TestAnalyzeResultFile
+go test -v -run TestCLI
+```
+
+To see test coverage:
+```
+go test -v -cover ./...
+```
+
+To generate a test coverage report:
+```
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+## Building
+
+Make sure you have Go installed on your system, then:
+
+```bash
+# Clone the repository
+git clone <your-repository-url>
+cd skukozh
+
+# Build the binary
+go build -o skukozh
 ```
 
 ## Output Format
