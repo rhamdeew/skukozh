@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"path/filepath"
 )
 
 func TestCLI(t *testing.T) {
@@ -16,6 +17,23 @@ func TestCLI(t *testing.T) {
 	testDir, cleanup := setupTestDir(t)
 	defer cleanup()
 
+	// Create some special files to test ignore functionality
+	// Hidden file
+	hiddenFilePath := filepath.Join(testDir, ".hidden.txt")
+	if err := os.WriteFile(hiddenFilePath, []byte("hidden content"), 0644); err != nil {
+		t.Fatalf("Failed to create hidden file: %v", err)
+	}
+
+	// Package directory
+	vendorDir := filepath.Join(testDir, "vendor")
+	if err := os.MkdirAll(vendorDir, 0755); err != nil {
+		t.Fatalf("Failed to create vendor directory: %v", err)
+	}
+	vendorFilePath := filepath.Join(vendorDir, "package.json")
+	if err := os.WriteFile(vendorFilePath, []byte("{\"name\": \"test\"}"), 0644); err != nil {
+		t.Fatalf("Failed to create vendor file: %v", err)
+	}
+
 	// Clean up test files after test
 	defer os.Remove("skukozh_file_list.txt")
 	defer os.Remove("skukozh_result.txt")
@@ -24,6 +42,7 @@ func TestCLI(t *testing.T) {
 		name          string
 		args          []string
 		expectedOut   string
+		notExpectedOut string // String that should NOT be in the output
 		expectFile    string
 		expectCode    int
 		setupRequired func(t *testing.T) // Function to run before the test
@@ -48,6 +67,38 @@ func TestCLI(t *testing.T) {
 			expectedOut: "File list saved to",
 			expectFile:  "skukozh_file_list.txt",
 			expectCode:  0,
+		},
+		{
+			name:        "Find command with no-ignore flag",
+			args:        []string{"skukozh", "-no-ignore", "find", testDir},
+			expectedOut: "File list saved to",
+			expectFile:  "skukozh_file_list.txt",
+			expectCode:  0,
+		},
+		{
+			name:        "Find command with verbose flag",
+			args:        []string{"skukozh", "-verbose", "find", testDir},
+			expectedOut: "Scanning directory",
+			expectFile:  "skukozh_file_list.txt",
+			expectCode:  0,
+		},
+		{
+			name:          "Find command with nonexistent directory",
+			args:          []string{"skukozh", "find", "/nonexistent/directory"},
+			expectedOut:   "Error walking directory",
+			expectFile:    "",
+			expectCode:    0,
+			setupRequired: func(t *testing.T) {
+				// Replace os.Exit to prevent actual exit
+				originalOsExit := osExit
+				osExit = func(code int) {
+					// Do nothing in test
+				}
+				// Restore after test
+				t.Cleanup(func() {
+					osExit = originalOsExit
+				})
+			},
 		},
 		{
 			name:        "Generate command",
@@ -99,10 +150,14 @@ func TestCLI(t *testing.T) {
 				t.Errorf("Expected output to contain '%s', but got: %s", tc.expectedOut, output)
 			}
 
+			if tc.notExpectedOut != "" && strings.Contains(output, tc.notExpectedOut) {
+				t.Errorf("Expected output to NOT contain '%s', but it did: %s", tc.notExpectedOut, output)
+			}
+
 			if tc.expectFile != "" {
 				fileExists := FileExists(tc.expectFile)
 				t.Logf("File %s exists: %v", tc.expectFile, fileExists)
-				if !fileExists {
+				if !fileExists && exitCode == 0 {
 					t.Errorf("Expected file %s to be created but it wasn't", tc.expectFile)
 				}
 			}

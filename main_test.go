@@ -79,47 +79,83 @@ func TestFindFiles(t *testing.T) {
 	}
 	defer os.Chdir(originalWd)
 
+	// Create a hidden file and directory to test ignore functionality
+	hiddenFile := filepath.Join(testDir, ".hidden.txt")
+	if err := os.WriteFile(hiddenFile, []byte("hidden content"), 0644); err != nil {
+		t.Fatalf("Failed to create hidden file: %v", err)
+	}
+
+	hiddenDir := filepath.Join(testDir, ".hiddendir")
+	if err := os.MkdirAll(hiddenDir, 0755); err != nil {
+		t.Fatalf("Failed to create hidden directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hiddenDir, "file.txt"), []byte("hidden dir file"), 0644); err != nil {
+		t.Fatalf("Failed to create file in hidden directory: %v", err)
+	}
+
+	// Create a binary file
+	binaryFile := filepath.Join(testDir, "image.jpg")
+	if err := os.WriteFile(binaryFile, []byte("fake binary data"), 0644); err != nil {
+		t.Fatalf("Failed to create binary file: %v", err)
+	}
+
+	// Create a package directory with a file
+	vendorDir := filepath.Join(testDir, "vendor")
+	if err := os.MkdirAll(vendorDir, 0755); err != nil {
+		t.Fatalf("Failed to create vendor directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(vendorDir, "package.js"), []byte("vendor file"), 0644); err != nil {
+		t.Fatalf("Failed to create file in vendor directory: %v", err)
+	}
+
+	// Temporarily set noIgnore to test values
+	originalNoIgnore := noIgnore
+	defer func() { noIgnore = originalNoIgnore }()
+
 	tests := []struct {
 		name           string
 		supportedExts  []string
+		noIgnoreValue  bool
 		expectedCount  int
 		expectedPrefix string
 	}{
-		{"All files", []string{}, 6, ""},
-		{"Go files only", []string{".go"}, 2, ""},
-		{"Multiple extensions", []string{".go", ".js"}, 3, ""},
-		{"No matching files", []string{".c"}, 0, ""},
+		{"Default behavior", []string{}, false, 5, ""}, // Finds .go, .js, .php, .txt but not hidden files or binary files
+		{"No ignore", []string{}, true, 9, ""}, // Should find all files including hidden and binary files
+		{"Go files only", []string{".go"}, false, 2, ""},
+		{"Multiple extensions", []string{".go", ".js"}, false, 3, ""},
+		{"No matching files", []string{".c"}, false, 0, ""},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			// Set noIgnore flag for this test
+			*noIgnore = tc.noIgnoreValue
+
 			// Clean up previous test file
 			os.Remove("skukozh_file_list.txt")
 
-			findFiles(testDir, tc.supportedExts)
+			// Call findFiles directly since we're testing it
+			files, err := findFilesInternal(testDir, tc.supportedExts)
+			if err != nil {
+				t.Fatalf("findFilesInternal returned error: %v", err)
+			}
 
-			// Check if the file was created
-			if !FileExists("skukozh_file_list.txt") {
-				if tc.expectedCount > 0 {
-					t.Fatalf("Expected output file was not created")
+			// Write files to test output
+			if len(files) > 0 {
+				output := strings.Join(files, "\n")
+				if err := os.WriteFile("skukozh_file_list.txt", []byte(output), 0644); err != nil {
+					t.Fatalf("Failed to write test output: %v", err)
 				}
-				return
 			}
 
-			fileContent := ReadTestFile(t, "skukozh_file_list.txt")
-			lines := strings.Split(fileContent, "\n")
-			// Remove empty line at the end if present
-			if len(lines) > 0 && lines[len(lines)-1] == "" {
-				lines = lines[:len(lines)-1]
+			// Check if the expected number of files was found
+			if len(files) != tc.expectedCount {
+				t.Errorf("Expected %d files, got %d. Files: %v", tc.expectedCount, len(files), files)
 			}
 
-			if len(lines) != tc.expectedCount {
-				t.Errorf("Expected %d files, got %d", tc.expectedCount, len(lines))
-			}
-
-			for _, line := range lines {
-				if tc.expectedPrefix != "" && !strings.HasPrefix(line, tc.expectedPrefix) {
-					t.Errorf("File path does not start with expected prefix: %s", line)
+			for _, file := range files {
+				if tc.expectedPrefix != "" && !strings.HasPrefix(file, tc.expectedPrefix) {
+					t.Errorf("File path does not start with expected prefix: %s", file)
 				}
 			}
 		})
@@ -140,9 +176,11 @@ func TestFindFilesErrors(t *testing.T) {
 	originalOsExit := osExit
 	defer func() { osExit = originalOsExit }()
 
+	var exitCode int
 	var exitCalled bool
 	// Mock os.Exit
 	osExit = func(code int) {
+		exitCode = code
 		exitCalled = true
 		// Don't actually exit
 	}
@@ -154,6 +192,11 @@ func TestFindFilesErrors(t *testing.T) {
 	// Verify exit was called
 	if !exitCalled {
 		t.Errorf("Expected os.Exit to be called")
+	}
+
+	// Verify the exit code
+	if exitCode != 1 {
+		t.Errorf("Expected exit code 1, got %d", exitCode)
 	}
 
 	// Verify the error message
