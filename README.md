@@ -23,14 +23,14 @@ A command-line tool to find and extract content from files in a directory. The t
 To find files with specific extensions and create a file list:
 
 ```bash
-# Find PHP and JavaScript files (long format)
+# Find PHP and JavaScript files
 ./skukozh --ext 'php,js' find /path/to/directory
 
 # Find PHP and JavaScript files (short format)
-./skukozh -e 'php,js' f /path/to/directory
+./skukozh --ext 'php,js' f /path/to/directory
 
 # Find PHP files only
-./skukozh -e 'php' f /path/to/directory
+./skukozh --ext 'php' f /path/to/directory
 
 # Find all files (no extension filter)
 ./skukozh f /path/to/directory
@@ -166,7 +166,7 @@ Long Format | Short Format | Description
 `find` | `f` | Find files in directory
 `gen` | `g` | Generate content file
 `analyze` | `a` | Analyze result file
-`--ext` | `-e` | Specify file extensions
+`--ext` | - | Specify file extensions
 `--no-ignore` | - | Include hidden files, binary files, and package directories
 `--verbose` | - | Show detailed output during operation
 

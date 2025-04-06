@@ -3,12 +3,22 @@ package main
 import (
 	"io"
 	"os"
+	"sync"
 	"testing"
+)
+
+var (
+	// Mutex to protect stdout modifications
+	stdoutMutex sync.Mutex
 )
 
 // CaptureOutput captures stdout during test execution
 func CaptureOutput(t *testing.T, f func()) string {
 	t.Helper()
+
+	// Lock stdout to ensure exclusive access
+	stdoutMutex.Lock()
+	defer stdoutMutex.Unlock()
 
 	// Save the original stdout
 	oldStdout := os.Stdout

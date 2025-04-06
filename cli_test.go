@@ -6,12 +6,17 @@ import (
 	"strings"
 	"testing"
 	"path/filepath"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestCLI(t *testing.T) {
 	// Save original args and restore them after test
 	originalArgs := os.Args
 	defer func() { os.Args = originalArgs }()
+
+	// Save original flags and restore them after test
+	originalFlagCommandLine := flag.CommandLine
+	defer func() { flag.CommandLine = originalFlagCommandLine }()
 
 	// Set up test directory
 	testDir, cleanup := setupTestDir(t)
@@ -63,7 +68,7 @@ func TestCLI(t *testing.T) {
 		},
 		{
 			name:        "Find command with extension filter",
-			args:        []string{"skukozh", "-e", "go", "find", testDir},
+			args:        []string{"skukozh", "-ext", "go", "find", testDir},
 			expectedOut: "File list saved to",
 			expectFile:  "skukozh_file_list.txt",
 			expectCode:  0,
@@ -122,8 +127,8 @@ func TestCLI(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Reset flags for each test
-			flag.CommandLine.Init("skukozh", flag.ContinueOnError)
+			// Create a custom FlagSet for this test instead of reusing the global one
+			flagSet := DefaultFlags()
 
 			// Run any required setup
 			if tc.setupRequired != nil {
@@ -134,10 +139,15 @@ func TestCLI(t *testing.T) {
 			os.Args = tc.args
 			t.Logf("Running with args: %v", tc.args)
 
+			// Parse flags with our custom FlagSet
+			if len(tc.args) > 0 {
+				flagSet.Parse(tc.args[1:])
+			}
+
 			// Capture output and exit code
 			var exitCode int
 			output := CaptureOutput(t, func() {
-				exitCode = run()
+				exitCode = runWithFlags(flagSet)
 			})
 			t.Logf("Output: %s", output)
 			t.Logf("Exit code: %d", exitCode)
@@ -192,14 +202,16 @@ func main() {
 	defer func() { os.Args = originalArgs }()
 
 	// Set args for analyze command
-	os.Args = []string{"skukozh", "analyze"}
+	args := []string{"skukozh", "analyze"}
+	os.Args = args
 
-	// Reset flags
-	flag.CommandLine.Init("skukozh", flag.ContinueOnError)
+	// Create a custom FlagSet for this test
+	flagSet := DefaultFlags()
+	flagSet.Parse(args[1:])
 
 	// Capture output
 	output := CaptureOutput(t, func() {
-		run() // Call run() instead of main()
+		runWithFlags(flagSet) // Use runWithFlags instead of run
 	})
 
 	// Verify expected output
@@ -210,4 +222,136 @@ func main() {
 	if !strings.Contains(output, "file1.go") {
 		t.Errorf("Expected file1.go in output, got: %s", output)
 	}
+}
+
+func TestFlagIsolation(t *testing.T) {
+	// Set up test directory
+	testDir, cleanup := setupTestDir(t)
+	defer cleanup()
+
+	// Create two different flag sets with different flag values
+	flagSet1 := DefaultFlags()
+	flagSet1.Parse([]string{"-verbose", "find", testDir})
+
+	flagSet2 := DefaultFlags()
+	flagSet2.Parse([]string{"-no-ignore", "find", testDir})
+
+	// Use separate output files for each test to avoid race conditions
+	file1 := "skukozh_file_list_1.txt"
+	file2 := "skukozh_file_list_2.txt"
+
+	// Override the fileListName for each test to avoid conflicts
+	origFileName := fileListName
+	defer func() { fileListName = origFileName }()
+
+	// Run the first command and capture output
+	fileListName = file1
+	output1 := CaptureOutput(t, func() {
+		runWithFlags(flagSet1)
+	})
+
+	// Run the second command and capture output
+	fileListName = file2
+	output2 := CaptureOutput(t, func() {
+		runWithFlags(flagSet2)
+	})
+
+	// Verify first output shows verbose messages
+	if !strings.Contains(output1, "Scanning directory") {
+		t.Errorf("Expected verbose output in first run, got: %s", output1)
+	}
+
+	// Verify second output doesn't contain verbose messages but does have the expected output
+	if !strings.Contains(output2, "File list saved to") {
+		t.Errorf("Expected 'File list saved to' in second run, got: %s", output2)
+	}
+
+	// Clean up
+	os.Remove(file1)
+	os.Remove(file2)
+}
+
+// Add a suite-based test to demonstrate testify suite functionality
+type CLISuite struct {
+	suite.Suite
+	testDir        string
+	cleanupFunc    func()
+	originalArgs   []string
+	originalFlags  *flag.FlagSet
+}
+
+func (s *CLISuite) SetupSuite() {
+	// Save original args and flags
+	s.originalArgs = os.Args
+	s.originalFlags = flag.CommandLine
+
+	// Set up test directory
+	var err error
+	s.testDir, s.cleanupFunc = setupTestDir(s.T())
+
+	// Create a special test file for the suite
+	testFilePath := filepath.Join(s.testDir, "suite_test.txt")
+	err = os.WriteFile(testFilePath, []byte("suite test content"), 0644)
+	s.Require().NoError(err, "Failed to create test file for suite")
+}
+
+func (s *CLISuite) TearDownSuite() {
+	// Clean up
+	if s.cleanupFunc != nil {
+		s.cleanupFunc()
+	}
+
+	// Restore original args and flags
+	os.Args = s.originalArgs
+	flag.CommandLine = s.originalFlags
+
+	// Clean up test files
+	os.Remove("skukozh_file_list.txt")
+	os.Remove("skukozh_result.txt")
+}
+
+func (s *CLISuite) TestFindCommand() {
+	// Set args for find command
+	os.Args = []string{"skukozh", "find", s.testDir}
+
+	// Create a custom FlagSet for this test
+	flagSet := DefaultFlags()
+	flagSet.Parse(os.Args[1:])
+
+	// Capture output
+	output := CaptureOutput(s.T(), func() {
+		runWithFlags(flagSet)
+	})
+
+	// Assert output using testify
+	s.Assert().Contains(output, "File list saved to", "Output should indicate file was saved")
+	s.Assert().FileExists("skukozh_file_list.txt", "File list should be created")
+
+	// Additional assertions
+	fileContent, err := os.ReadFile("skukozh_file_list.txt")
+	s.Require().NoError(err, "Should be able to read file list")
+	s.Assert().NotEmpty(fileContent, "File list should not be empty")
+}
+
+func (s *CLISuite) TestVerboseFlag() {
+	// Test with verbose flag
+	os.Args = []string{"skukozh", "-verbose", "find", s.testDir}
+
+	// Create a custom FlagSet for this test
+	flagSet := DefaultFlags()
+	flagSet.Parse(os.Args[1:])
+
+	// Capture output
+	output := CaptureOutput(s.T(), func() {
+		runWithFlags(flagSet)
+	})
+
+	// Assert using testify
+	s.Assert().Contains(output, "Scanning directory", "Verbose output should show scanning information")
+	s.Assert().FileExists("skukozh_file_list.txt", "File list should be created")
+}
+
+// Run the suite
+func TestCLISuite(t *testing.T) {
+	suite.Run(t, new(CLISuite))
 }
