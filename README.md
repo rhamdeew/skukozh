@@ -2,6 +2,8 @@
 
 A command-line tool to find and extract content from files in a directory. The tool is particularly useful for preparing code files for analysis by AI models like Claude or GPT.
 
+![CI/CD Status](https://github.com/rhamdeew/skukozh/actions/workflows/build.yml/badge.svg)
+
 ## Features
 
 - Find files by extension in a directory and create a file list

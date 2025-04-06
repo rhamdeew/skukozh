@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/tabwriter"
 	"unicode"
 )
 
@@ -304,58 +305,41 @@ func analyzeResultFileInternal(topCount int) (string, error) {
 		return files[i].size > files[j].size
 	})
 
-	// Find the longest file path for formatting
-	maxPathLen := 0
-	for _, file := range files {
-		if len(file.path) > maxPathLen {
-			maxPathLen = len(file.path)
-		}
-	}
-	// Ensure minimum width and add padding
-	if maxPathLen < 50 {
-		maxPathLen = 50
-	}
-	maxPathLen += 2 // Add some padding
-
-	var result strings.Builder
+	var buf bytes.Buffer
+	w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
 
 	// Print header
-	result.WriteString("\nAnalysis Report\n")
-	result.WriteString("==============\n\n")
-	result.WriteString(fmt.Sprintf("Total file size: %.2f MB\n", fileSize))
-	result.WriteString(fmt.Sprintf("Total symbols: %d\n\n", symbols))
+	fmt.Fprintln(&buf, "\nAnalysis Report")
+	fmt.Fprintln(&buf, "==============")
+	fmt.Fprintf(&buf, "Total file size: %.2f MB\n", fileSize)
+	fmt.Fprintf(&buf, "Total symbols: %d\n\n", symbols)
 
 	if len(files) == 0 {
-		result.WriteString("No files found in the result file.\n")
-		return result.String(), nil
+		fmt.Fprintln(&buf, "No files found in the result file.")
+		return buf.String(), nil
 	}
 
-	result.WriteString(fmt.Sprintf("Top %d largest files:\n", topCount))
+	fmt.Fprintf(&buf, "Top %d largest files:\n", topCount)
 
-	// Print table header with proper spacing
-	headerFormat := fmt.Sprintf("%%-%ds %%12s %%15s\n", maxPathLen)
-	result.WriteString(fmt.Sprintf(headerFormat, "File", "Size (KB)", "Symbols"))
-
-	// Print separator with proper length
-	result.WriteString(fmt.Sprintf("%s %s %s\n",
-		strings.Repeat("─", maxPathLen),
-		strings.Repeat("─", 12),
-		strings.Repeat("─", 15)))
+	// Print table header using tabwriter
+	fmt.Fprintln(w, "File\tSize (KB)\tSymbols")
+	fmt.Fprintln(w, "────\t────────\t───────")
 
 	// Print file information
-	fileFormat := fmt.Sprintf("%%-%ds %%12.2f %%15d\n", maxPathLen)
 	for i, file := range files {
 		if i >= topCount {
 			break
 		}
-		result.WriteString(fmt.Sprintf(fileFormat,
+		fmt.Fprintf(w, "%s\t%.2f\t%d\n",
 			file.path,
 			float64(file.size)/1024,
-			file.symbols))
+			file.symbols)
 	}
-	result.WriteString("\n")
 
-	return result.String(), nil
+	w.Flush()
+	fmt.Fprintln(&buf, "")
+
+	return buf.String(), nil
 }
 
 func contains(slice []string, item string) bool {
