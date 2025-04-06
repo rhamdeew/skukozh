@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"unicode"
-	"io/fs"
 )
 
 var (
