@@ -19,9 +19,17 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.23'
+    - name: Check for go.sum
+      id: check-gosum
+      run: |
+        if [ -f "go.sum" ]; then
+          echo "gosum_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "gosum_exists=false" >> $GITHUB_OUTPUT
+        fi
     - name: Setup Go cache
       uses: actions/cache@v3
-      if: hashFiles('go.sum') != ''
+      if: steps.check-gosum.outputs.gosum_exists == 'true'
       with:
         path: |
           ~/.cache/go-build
@@ -51,9 +59,17 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.23'
+    - name: Check for go.sum
+      id: check-gosum
+      run: |
+        if [ -f "go.sum" ]; then
+          echo "gosum_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "gosum_exists=false" >> $GITHUB_OUTPUT
+        fi
     - name: Setup Go cache
       uses: actions/cache@v3
-      if: hashFiles('go.sum') != ''
+      if: steps.check-gosum.outputs.gosum_exists == 'true'
       with:
         path: |
           ~/.cache/go-build
