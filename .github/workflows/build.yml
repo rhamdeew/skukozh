@@ -33,7 +33,7 @@ jobs:
       with:
         path: |
           ~/.cache/go-build
-          ~/go/pkg/mod
+          ~/go/pkg/mod/cache
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-
@@ -46,8 +46,7 @@ jobs:
       with:
         file: ./coverage.txt
         fail_ci_if_error: false
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   build:
     runs-on: ubuntu-latest
@@ -73,7 +72,7 @@ jobs:
       with:
         path: |
           ~/.cache/go-build
-          ~/go/pkg/mod
+          ~/go/pkg/mod/cache
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
         restore-keys: |
           ${{ runner.os }}-go-
@@ -84,20 +83,20 @@ jobs:
         build() {
           os=$1
           arch=$2
-          output="skukozh-${os}-${arch}"
+          binary_name="skukozh-${os}-${arch}"
+          archive_name="${binary_name}"
           if [ "$os" = "windows" ]; then
-            output="${output}.exe"
+            binary_name="${binary_name}.exe"
           fi
           echo "Building for ${os}/${arch}..."
-          GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -ldflags="-s -w" -o "releases/${output}"
-          cd releases
+          GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -ldflags="-s -w" -o "releases/${binary_name}"
+
+          # Create archives without cd'ing into releases
           if [ "$os" = "windows" ]; then
-            zip "${output}.zip" "${output}"
+            (cd releases && zip "${archive_name}.zip" "${binary_name}" && rm "${binary_name}")
           else
-            tar -czvf "${output}.tar.gz" "${output}"
+            (cd releases && tar -czf "${archive_name}.tar.gz" "${binary_name}" && rm "${binary_name}")
           fi
-          cd ..
-          rm "releases/${output}"
         }
         # Build for various platforms
         build linux amd64
