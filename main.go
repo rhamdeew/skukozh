@@ -17,15 +17,62 @@ var (
 	extFlag   = flag.String("ext", "", "Comma-separated list of file extensions (e.g., 'php,js,ts')")
 	shortExt  = flag.String("e", "", "Short form of -ext flag")
 	countFlag = flag.Int("count", 20, "Number of largest files to show in analyze command")
+	noIgnore  = flag.Bool("no-ignore", false, "Don't apply default ignore patterns")
+	verbose   = flag.Bool("verbose", false, "Show verbose output while finding files")
 
 	// Variable for os.Exit that can be overridden in tests
 	osExit = os.Exit
 )
 
+// Common directories to ignore
+var ignoredDirs = []string{
+	"node_modules",
+	"vendor",
+	"dist",
+	"build",
+	".git",
+	".svn",
+	".hg",
+	"bower_components",
+	"target",
+	"bin",
+	"obj",
+}
+
+// Common binary/non-text file extensions
+var binaryFileExts = []string{
+	// Images
+	".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", ".svg", ".webp",
+	// Audio
+	".mp3", ".wav", ".ogg", ".flac", ".aac", ".m4a",
+	// Video
+	".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv", ".webm",
+	// Archives
+	".zip", ".tar", ".gz", ".rar", ".7z", ".jar", ".war",
+	// Binaries
+	".exe", ".dll", ".so", ".dylib", ".bin", ".dat",
+	// Other binary formats
+	".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+}
+
+// Common text file extensions that are always allowed
+var commonTextExts = []string{
+	// Programming languages
+	".go", ".py", ".js", ".ts", ".java", ".c", ".cpp", ".h", ".hpp", ".cs", ".php", ".rb", ".rs", ".swift",
+	// Web
+	".html", ".htm", ".css", ".scss", ".sass", ".less", ".jsx", ".tsx", ".vue", ".svelte",
+	// Config files
+	".json", ".yaml", ".yml", ".toml", ".xml", ".ini", ".env",
+	// Documentation
+	".md", ".txt", ".rst", ".adoc",
+	// Shell scripts
+	".sh", ".bash", ".zsh", ".fish", ".bat", ".cmd", ".ps1",
+}
+
 const usage = `Usage:
-  skukozh [-e|-ext 'ext1,ext2,...'] find|f <directory>  - Find files and create file list
-  skukozh gen|g <directory>                             - Generate content file from file list
-  skukozh [-count N] analyze|a                          - Analyze the result file (default top 20 files)
+  skukozh [-e|-ext 'ext1,ext2,...'] [-no-ignore] [-verbose] find|f <directory>  - Find files and create file list
+  skukozh gen|g <directory>                                                      - Generate content file from file list
+  skukozh [-count N] analyze|a                                                   - Analyze the result file (default top 20 files)
 `
 
 type FileInfo struct {
@@ -106,6 +153,12 @@ func findFiles(root string, supportedExts []string) {
 	if err != nil {
 		fmt.Printf("Error walking directory: %v\n", err)
 		osExit(1)
+		return // This ensures the function stops here in tests
+	}
+
+	if len(files) == 0 {
+		fmt.Println("No files found! Use -no-ignore flag to include hidden files and directories.")
+		return
 	}
 
 	// Write to file
@@ -114,30 +167,119 @@ func findFiles(root string, supportedExts []string) {
 	if err != nil {
 		fmt.Printf("Error writing file list: %v\n", err)
 		osExit(1)
+		return // This ensures the function stops here in tests
 	}
 
-	fmt.Println("File list saved to skukozh_file_list.txt")
+	fmt.Printf("Found %d files. File list saved to skukozh_file_list.txt\n", len(files))
 }
 
 // findFilesInternal is a testable version of findFiles that returns errors instead of exiting
 func findFilesInternal(root string, supportedExts []string) ([]string, error) {
 	var files []string
+	debugMode := *verbose || os.Getenv("SKUKOZH_DEBUG") == "1"
 
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	if len(supportedExts) == 0 {
+		// If no extensions are specified, use common text extensions
+		supportedExts = commonTextExts
+	}
+
+	// Make sure the root is an absolute path
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path: %w", err)
+	}
+
+	// Check if the root path exists and is a directory
+	rootInfo, err := os.Stat(absRoot)
+	if err != nil {
+		return nil, fmt.Errorf("cannot access directory: %w", err)
+	}
+	if !rootInfo.IsDir() {
+		return nil, fmt.Errorf("%s is not a directory", absRoot)
+	}
+
+	if debugMode {
+		fmt.Printf("Scanning directory: %s\n", absRoot)
+	}
+
+	err = filepath.WalkDir(absRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			if debugMode {
+				fmt.Printf("Error accessing path %s: %v\n", path, err)
+			}
+			return nil // Skip errors and continue
+		}
+
+		// Get relative path for proper display in messages
+		relPath, relErr := filepath.Rel(absRoot, path)
+		if relErr != nil {
+			relPath = path
+		}
+		relPath = filepath.ToSlash(relPath)
+
+		// Skip root directory itself
+		if path == absRoot {
+			return nil
+		}
+
+		// Check if it's a hidden file or directory
+		if !*noIgnore && isHidden(d.Name()) {
+			if d.IsDir() {
+				if debugMode {
+					fmt.Printf("Skipping hidden directory: %s\n", relPath)
+				}
+				return filepath.SkipDir
+			}
+			if debugMode {
+				fmt.Printf("Skipping hidden file: %s\n", relPath)
+			}
+			return nil
+		}
+
+		// Skip go build files
+		if d.IsDir() && strings.HasPrefix(d.Name(), "_") {
+			if debugMode {
+				fmt.Printf("Skipping Go build dir: %s\n", relPath)
+			}
+			return filepath.SkipDir
+		}
+
+		// Skip ignored directories
+		if !*noIgnore && d.IsDir() && containsIgnoreCase(ignoredDirs, d.Name()) {
+			if debugMode {
+				fmt.Printf("Skipping package directory: %s\n", relPath)
+			}
+			return filepath.SkipDir
 		}
 
 		if !d.IsDir() {
 			ext := filepath.Ext(path)
-			if len(supportedExts) == 0 || contains(supportedExts, ext) {
-				// Convert to relative path and use forward slashes
-				relPath, err := filepath.Rel(root, path)
-				if err != nil {
-					return err
+
+			// Skip binary files
+			if !*noIgnore && contains(binaryFileExts, strings.ToLower(ext)) {
+				if debugMode {
+					fmt.Printf("Skipping binary file: %s\n", relPath)
 				}
-				relPath = filepath.ToSlash(relPath)
+				return nil
+			}
+
+			// Skip empty files
+			info, err := d.Info()
+			if err == nil && info.Size() == 0 {
+				if debugMode {
+					fmt.Printf("Skipping empty file: %s\n", relPath)
+				}
+				return nil
+			}
+
+			// Check if the file extension matches
+			if *noIgnore || len(supportedExts) == 0 || contains(supportedExts, strings.ToLower(ext)) {
+				if debugMode {
+					fmt.Printf("Adding file: %s\n", relPath)
+				}
 				files = append(files, relPath)
+			} else if debugMode {
+				fmt.Printf("Skipping file with unsupported extension: %s\n", relPath)
 			}
 		}
 		return nil
@@ -150,7 +292,26 @@ func findFilesInternal(root string, supportedExts []string) ([]string, error) {
 	// Sort files for consistent output
 	sort.Strings(files)
 
+	if debugMode {
+		fmt.Printf("Found %d files\n", len(files))
+	}
+
 	return files, nil
+}
+
+// isHidden checks if a file or directory is hidden (starts with .)
+func isHidden(name string) bool {
+	return strings.HasPrefix(name, ".")
+}
+
+// containsIgnoreCase checks if a slice contains a string, ignoring case
+func containsIgnoreCase(slice []string, item string) bool {
+	for _, s := range slice {
+		if strings.EqualFold(s, item) {
+			return true
+		}
+	}
+	return false
 }
 
 func generateContentFile(baseDir string) {

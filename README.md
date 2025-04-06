@@ -13,6 +13,8 @@ A command-line tool to find and extract content from files in a directory. The t
 - Preserves original file paths in output
 - Removes blank lines to optimize token usage
 - Supports both long and short command formats
+- Automatically ignores hidden files, binary files, and third-party package directories
+- Supports verbose mode for detailed operation logging
 
 ## Usage
 
@@ -32,6 +34,12 @@ To find files with specific extensions and create a file list:
 
 # Find all files (no extension filter)
 ./skukozh f /path/to/directory
+
+# Include hidden and binary files (normally ignored by default)
+./skukozh -no-ignore f /path/to/directory
+
+# Show detailed output during file discovery
+./skukozh -verbose f /path/to/directory
 ```
 
 This will create `skukozh_file_list.txt` with relative paths to all matching files.
@@ -159,6 +167,17 @@ Long Format | Short Format | Description
 `gen` | `g` | Generate content file
 `analyze` | `a` | Analyze result file
 `--ext` | `-e` | Specify file extensions
+`--no-ignore` | - | Include hidden files, binary files, and package directories
+`--verbose` | - | Show detailed output during operation
+
+## Ignore Patterns
+
+By default, skukozh ignores:
+- Hidden files and directories (starting with `.`)
+- Binary files (common image, audio, video formats, etc.)
+- Third-party package directories (`node_modules`, `vendor`, `dist`, etc.)
+
+Use the `-no-ignore` flag to include all files.
 
 ## Special Thanks
 
