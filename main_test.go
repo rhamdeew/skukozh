@@ -1,10 +1,13 @@
 package main
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestContains(t *testing.T) {
@@ -22,11 +25,29 @@ func TestContains(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result := contains(tc.slice, tc.item)
-			if result != tc.expected {
-				t.Errorf("contains(%v, %s) = %v, expected %v", tc.slice, tc.item, result, tc.expected)
-			}
+			assert.Equal(t, tc.expected, result, "contains should return the correct result")
 		})
 	}
+
+	// Additional assertions to demonstrate testify's capabilities
+	t.Run("testify additional assertions", func(t *testing.T) {
+		// Testing slices
+		slice := []string{".go", ".js", ".php"}
+		assert.Contains(t, slice, ".go", "Slice should contain element")
+		assert.NotContains(t, slice, ".ts", "Slice should not contain element")
+		assert.Len(t, slice, 3, "Slice should have correct length")
+
+		// Using require for fatal assertions
+		emptySlice := []string{}
+		require.Empty(t, emptySlice, "Slice should be empty")
+
+		// String assertions
+		assert.Contains(t, "test.go", ".go", "String should contain substring")
+
+		// Boolean assertions
+		assert.True(t, contains(slice, ".go"), "Contains should return true")
+		assert.False(t, contains(slice, ".ts"), "Contains should return false")
+	})
 }
 
 func setupTestDir(t *testing.T) (string, func()) {
@@ -69,6 +90,10 @@ func TestFindFiles(t *testing.T) {
 	testDir, cleanup := setupTestDir(t)
 	defer cleanup()
 
+	// Save original flags and restore them after test
+	originalFlagCommandLine := flag.CommandLine
+	defer func() { flag.CommandLine = originalFlagCommandLine }()
+
 	// Temporarily change working directory
 	originalWd, err := os.Getwd()
 	if err != nil {
@@ -108,10 +133,7 @@ func TestFindFiles(t *testing.T) {
 		t.Fatalf("Failed to create file in vendor directory: %v", err)
 	}
 
-	// Temporarily set noIgnore to test values
-	originalNoIgnore := noIgnore
-	defer func() { noIgnore = originalNoIgnore }()
-
+	// Create local variables for flags instead of using global ones
 	tests := []struct {
 		name           string
 		supportedExts  []string
@@ -120,21 +142,32 @@ func TestFindFiles(t *testing.T) {
 		expectedPrefix string
 	}{
 		{"Default behavior", []string{}, false, 5, ""}, // Finds .go, .js, .php, .txt but not hidden files or binary files
-		{"No ignore", []string{}, true, 9, ""}, // Should find all files including hidden and binary files
+		{"No ignore", []string{}, true, 9, ""}, // Should find all files including hidden, binary, and package files
 		{"Go files only", []string{".go"}, false, 2, ""},
 		{"Multiple extensions", []string{".go", ".js"}, false, 3, ""},
 		{"No matching files", []string{".c"}, false, 0, ""},
 	}
 
 	for _, tc := range tests {
+		tc := tc // Capture range variable for parallel tests
 		t.Run(tc.name, func(t *testing.T) {
-			// Set noIgnore flag for this test
-			*noIgnore = tc.noIgnoreValue
-
 			// Clean up previous test file
 			os.Remove("skukozh_file_list.txt")
 
-			// Call findFiles directly since we're testing it
+			// Store original noIgnore value and restore it at the end of the test
+			flagMutex.Lock()
+			originalNoIgnoreValue := *noIgnore
+			*noIgnore = tc.noIgnoreValue
+			flagMutex.Unlock()
+
+			// Make sure we restore it when we're done
+			defer func() {
+				flagMutex.Lock()
+				*noIgnore = originalNoIgnoreValue
+				flagMutex.Unlock()
+			}()
+
+			// For the find command directly:
 			files, err := findFilesInternal(testDir, tc.supportedExts)
 			if err != nil {
 				t.Fatalf("findFilesInternal returned error: %v", err)
@@ -142,15 +175,16 @@ func TestFindFiles(t *testing.T) {
 
 			// Write files to test output
 			if len(files) > 0 {
-				output := strings.Join(files, "\n")
-				if err := os.WriteFile("skukozh_file_list.txt", []byte(output), 0644); err != nil {
+				fileContent := strings.Join(files, "\n")
+				if err := os.WriteFile("skukozh_file_list.txt", []byte(fileContent), 0644); err != nil {
 					t.Fatalf("Failed to write test output: %v", err)
 				}
 			}
 
 			// Check if the expected number of files was found
 			if len(files) != tc.expectedCount {
-				t.Errorf("Expected %d files, got %d. Files: %v", tc.expectedCount, len(files), files)
+				t.Logf("With noIgnore=%v, found %d files: %v", tc.noIgnoreValue, len(files), files)
+				t.Errorf("Expected %d files, got %d.", tc.expectedCount, len(files))
 			}
 
 			for _, file := range files {
@@ -186,7 +220,9 @@ func TestFindFilesErrors(t *testing.T) {
 	}
 
 	output := CaptureOutput(t, func() {
-		findFiles(nonExistentDir, nil)
+		// Create a temporary FlagSet for this test
+		tempFlags := DefaultFlags()
+		findFiles(nonExistentDir, nil, tempFlags)
 	})
 
 	// Verify exit was called

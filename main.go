@@ -8,17 +8,26 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"unicode"
 )
 
+const (
+	resultName   = "skukozh_result.txt"
+)
+
 var (
+	fileListName = "skukozh_file_list.txt"
 	extFlag   = flag.String("ext", "", "Comma-separated list of file extensions (e.g., 'php,js,ts')")
-	shortExt  = flag.String("e", "", "Short form of -ext flag")
 	countFlag = flag.Int("count", 20, "Number of largest files to show in analyze command")
 	noIgnore  = flag.Bool("no-ignore", false, "Don't apply default ignore patterns")
 	verbose   = flag.Bool("verbose", false, "Show verbose output while finding files")
+
+	// Mutex to protect access to the flag variables
+	flagMutex = &sync.Mutex{}
 
 	// Variable for os.Exit that can be overridden in tests
 	osExit = os.Exit
@@ -70,9 +79,9 @@ var commonTextExts = []string{
 }
 
 const usage = `Usage:
-  skukozh [-e|-ext 'ext1,ext2,...'] [-no-ignore] [-verbose] find|f <directory>  - Find files and create file list
-  skukozh gen|g <directory>                                                      - Generate content file from file list
-  skukozh [-count N] analyze|a                                                   - Analyze the result file (default top 20 files)
+  skukozh [-ext 'ext1,ext2,...'] [-no-ignore] [-verbose] find|f <directory>  - Find files and create file list
+  skukozh gen|g <directory>                                                   - Generate content file from file list
+  skukozh [-count N] analyze|a                                                - Analyze the result file (default top 20 files)
 `
 
 type FileInfo struct {
@@ -81,29 +90,38 @@ type FileInfo struct {
 	symbols int
 }
 
+// DefaultFlags returns a new FlagSet with the default flags defined
+func DefaultFlags() *flag.FlagSet {
+	fs := flag.NewFlagSet("skukozh", flag.ContinueOnError)
+	fs.String("ext", "", "Comma-separated list of file extensions (e.g., 'php,js,ts')")
+	fs.Int("count", 20, "Number of largest files to show in analyze command")
+	fs.Bool("no-ignore", false, "Don't apply default ignore patterns")
+	fs.Bool("verbose", false, "Show verbose output while finding files")
+	return fs
+}
+
 func main() {
-	// Call run, which contains the actual logic
-	os.Exit(run())
+	// Parse flags before accessing arguments
+	flag.Parse()
+	os.Exit(runWithFlags(flag.CommandLine))
 }
 
 // run handles the command execution and returns the exit code
 func run() int {
-	// Support both -ext and --ext
-	flag.CommandLine.Init("skukozh", flag.ContinueOnError)
-	flag.Parse()
+	return runWithFlags(flag.CommandLine)
+}
 
-	args := flag.Args()
+// runWithFlags handles command execution with a specific FlagSet
+func runWithFlags(fs *flag.FlagSet) int {
+	args := fs.Args()
 	if len(args) == 0 {
 		fmt.Print(usage)
 		return 1
 	}
 
-	// Parse supported extensions from either -ext or -e flag
+	// Parse supported extensions from -ext flag
 	var supportedExts []string
-	extValue := *extFlag
-	if *shortExt != "" {
-		extValue = *shortExt
-	}
+	extValue := fs.Lookup("ext").Value.String()
 	if extValue != "" {
 		exts := strings.Split(extValue, ",")
 		for _, ext := range exts {
@@ -123,7 +141,7 @@ func run() int {
 			return 1
 		}
 		directory := args[1]
-		findFiles(directory, supportedExts)
+		findFiles(directory, supportedExts, fs)
 
 	case "gen", "g":
 		if len(args) != 2 {
@@ -138,7 +156,8 @@ func run() int {
 			fmt.Print(usage)
 			return 1
 		}
-		analyzeResultFile(*countFlag)
+		countValue, _ := strconv.Atoi(fs.Lookup("count").Value.String())
+		analyzeResultFile(countValue)
 
 	default:
 		fmt.Print(usage)
@@ -148,7 +167,29 @@ func run() int {
 	return 0
 }
 
-func findFiles(root string, supportedExts []string) {
+func findFiles(root string, supportedExts []string, fs *flag.FlagSet) {
+	// Get flag values from the provided FlagSet
+	noIgnoreValue, _ := strconv.ParseBool(fs.Lookup("no-ignore").Value.String())
+	verboseValue, _ := strconv.ParseBool(fs.Lookup("verbose").Value.String())
+
+	// Save current values to restore later (with mutex protection)
+	flagMutex.Lock()
+	origNoIgnore := *noIgnore
+	origVerbose := *verbose
+
+	// Update global variables for compatibility with existing code
+	*noIgnore = noIgnoreValue
+	*verbose = verboseValue
+	flagMutex.Unlock()
+
+	// Restore global variables when done
+	defer func() {
+		flagMutex.Lock()
+		*noIgnore = origNoIgnore
+		*verbose = origVerbose
+		flagMutex.Unlock()
+	}()
+
 	files, err := findFilesInternal(root, supportedExts)
 	if err != nil {
 		fmt.Printf("Error walking directory: %v\n", err)
@@ -163,20 +204,24 @@ func findFiles(root string, supportedExts []string) {
 
 	// Write to file
 	output := strings.Join(files, "\n")
-	err = os.WriteFile("skukozh_file_list.txt", []byte(output), 0644)
+	err = os.WriteFile(fileListName, []byte(output), 0644)
 	if err != nil {
 		fmt.Printf("Error writing file list: %v\n", err)
 		osExit(1)
 		return // This ensures the function stops here in tests
 	}
 
-	fmt.Printf("Found %d files. File list saved to skukozh_file_list.txt\n", len(files))
+	fmt.Printf("Found %d files. File list saved to %s\n", len(files), fileListName)
 }
 
 // findFilesInternal is a testable version of findFiles that returns errors instead of exiting
 func findFilesInternal(root string, supportedExts []string) ([]string, error) {
 	var files []string
+
+	// Safely read verbose flag
+	flagMutex.Lock()
 	debugMode := *verbose || os.Getenv("SKUKOZH_DEBUG") == "1"
+	flagMutex.Unlock()
 
 	if len(supportedExts) == 0 {
 		// If no extensions are specified, use common text extensions
@@ -223,7 +268,11 @@ func findFilesInternal(root string, supportedExts []string) ([]string, error) {
 		}
 
 		// Check if it's a hidden file or directory
-		if !*noIgnore && isHidden(d.Name()) {
+		flagMutex.Lock()
+		noIgnoreValue := *noIgnore
+		flagMutex.Unlock()
+
+		if !noIgnoreValue && isHidden(d.Name()) {
 			if d.IsDir() {
 				if debugMode {
 					fmt.Printf("Skipping hidden directory: %s\n", relPath)
@@ -245,7 +294,7 @@ func findFilesInternal(root string, supportedExts []string) ([]string, error) {
 		}
 
 		// Skip ignored directories
-		if !*noIgnore && d.IsDir() && containsIgnoreCase(ignoredDirs, d.Name()) {
+		if !noIgnoreValue && d.IsDir() && containsIgnoreCase(ignoredDirs, d.Name()) {
 			if debugMode {
 				fmt.Printf("Skipping package directory: %s\n", relPath)
 			}
@@ -253,10 +302,18 @@ func findFilesInternal(root string, supportedExts []string) ([]string, error) {
 		}
 
 		if !d.IsDir() {
+			// Skip tool's own files (using base filename check for root directory files)
+			if d.Name() == fileListName || d.Name() == resultName {
+				if debugMode {
+					fmt.Printf("Skipping tool file in root: %s\n", relPath)
+				}
+				return nil
+			}
+
 			ext := filepath.Ext(path)
 
 			// Skip binary files
-			if !*noIgnore && contains(binaryFileExts, strings.ToLower(ext)) {
+			if !noIgnoreValue && contains(binaryFileExts, strings.ToLower(ext)) {
 				if debugMode {
 					fmt.Printf("Skipping binary file: %s\n", relPath)
 				}
@@ -273,7 +330,7 @@ func findFilesInternal(root string, supportedExts []string) ([]string, error) {
 			}
 
 			// Check if the file extension matches
-			if *noIgnore || len(supportedExts) == 0 || contains(supportedExts, strings.ToLower(ext)) {
+			if noIgnoreValue || len(supportedExts) == 0 || contains(supportedExts, strings.ToLower(ext)) {
 				if debugMode {
 					fmt.Printf("Adding file: %s\n", relPath)
 				}
@@ -322,19 +379,19 @@ func generateContentFile(baseDir string) {
 	}
 
 	// Write result file
-	err = os.WriteFile("skukozh_result.txt", []byte(result), 0644)
+	err = os.WriteFile(resultName, []byte(result), 0644)
 	if err != nil {
 		fmt.Printf("Error writing result file: %v\n", err)
 		osExit(1)
 	}
 
-	fmt.Println("Content file saved to skukozh_result.txt")
+	fmt.Printf("Content file saved to %s\n", resultName)
 }
 
 // generateContentFileInternal is a testable version that returns errors instead of exiting
 func generateContentFileInternal(baseDir string) (string, error) {
 	// Read file list
-	content, err := os.ReadFile("skukozh_file_list.txt")
+	content, err := os.ReadFile(fileListName)
 	if err != nil {
 		return "", err
 	}
@@ -396,7 +453,7 @@ func analyzeResultFile(topCount int) {
 
 // analyzeResultFileInternal is a testable version that returns errors instead of exiting
 func analyzeResultFileInternal(topCount int) (string, error) {
-	content, err := os.ReadFile("skukozh_result.txt")
+	content, err := os.ReadFile(resultName)
 	if err != nil {
 		return "", err
 	}

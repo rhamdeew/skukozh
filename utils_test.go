@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestContainsFull(t *testing.T) {
@@ -24,9 +25,7 @@ func TestContainsFull(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result := contains(tc.slice, tc.item)
-			if result != tc.expected {
-				t.Errorf("contains(%v, %s) = %v, want %v", tc.slice, tc.item, result, tc.expected)
-			}
+			assert.Equal(t, tc.expected, result, "contains(%v, %s) returned unexpected result", tc.slice, tc.item)
 		})
 	}
 }
@@ -48,9 +47,7 @@ func TestIsHidden(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result := isHidden(tc.filename)
-			if result != tc.expected {
-				t.Errorf("isHidden(%s) = %v, want %v", tc.filename, result, tc.expected)
-			}
+			assert.Equal(t, tc.expected, result, "isHidden(%s) returned unexpected result", tc.filename)
 		})
 	}
 }
@@ -73,9 +70,7 @@ func TestContainsIgnoreCase(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			result := containsIgnoreCase(tc.slice, tc.item)
-			if result != tc.expected {
-				t.Errorf("containsIgnoreCase(%v, %s) = %v, want %v", tc.slice, tc.item, result, tc.expected)
-			}
+			assert.Equal(t, tc.expected, result, "containsIgnoreCase(%v, %s) returned unexpected result", tc.slice, tc.item)
 		})
 	}
 }
