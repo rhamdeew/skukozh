@@ -38,12 +38,12 @@ func setupTestDir(t *testing.T) (string, func()) {
 
 	// Create test files
 	files := map[string]string{
-		"file1.go":           "package main\nfunc main() {\n\n}",
-		"file2.js":           "function test() {\n\n}",
-		"subdir/file3.go":    "package sub\nfunc Sub() {\n\n}",
-		"subdir/file4.php":   "<?php\necho 'test';\n?>",
-		"empty.txt":          "",
-		"file5.txt":          "Some text content\n\nWith blank lines",
+		"file1.go":         "package main\nfunc main() {\n\n}",
+		"file2.js":         "function test() {\n\n}",
+		"subdir/file3.go":  "package sub\nfunc Sub() {\n\n}",
+		"subdir/file4.php": "<?php\necho 'test';\n?>",
+		"empty.txt":        "",
+		"file5.txt":        "Some text content\n\nWith blank lines",
 	}
 
 	for path, content := range files {

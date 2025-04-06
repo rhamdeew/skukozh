@@ -21,12 +21,12 @@ func TestCLI(t *testing.T) {
 	defer os.Remove("skukozh_result.txt")
 
 	tests := []struct {
-		name           string
-		args           []string
-		expectedOut    string
-		expectFile     string
-		expectCode     int
-		setupRequired  func(t *testing.T)  // Function to run before the test
+		name          string
+		args          []string
+		expectedOut   string
+		expectFile    string
+		expectCode    int
+		setupRequired func(t *testing.T) // Function to run before the test
 	}{
 		{
 			name:        "No arguments shows usage",
