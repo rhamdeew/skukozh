@@ -16,16 +16,16 @@ import (
 )
 
 const (
-	resultName   = "skukozh_result.txt"
+	resultName = "skukozh_result.txt"
 )
 
 var (
 	fileListName = "skukozh_file_list.txt"
-	extFlag   = flag.String("ext", "", "Comma-separated list of file extensions (e.g., 'php,js,ts')")
-	countFlag = flag.Int("count", 20, "Number of largest files to show in analyze command")
-	noIgnore  = flag.Bool("no-ignore", false, "Don't apply default ignore patterns")
-	hidden    = flag.Bool("hidden", false, "Include hidden files and don't follow .gitignore rules")
-	verbose   = flag.Bool("verbose", false, "Show verbose output while finding files")
+	extFlag      = flag.String("ext", "", "Comma-separated list of file extensions (e.g., 'php,js,ts')")
+	countFlag    = flag.Int("count", 20, "Number of largest files to show in analyze command")
+	noIgnore     = flag.Bool("no-ignore", false, "Don't apply default ignore patterns")
+	hidden       = flag.Bool("hidden", false, "Include hidden files and don't follow .gitignore rules")
+	verbose      = flag.Bool("verbose", false, "Show verbose output while finding files")
 
 	// Mutex to protect access to the flag variables
 	flagMutex = &sync.Mutex{}

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"testing"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"path/filepath"
+	"testing"
 )
 
 func TestContainsFull(t *testing.T) {
