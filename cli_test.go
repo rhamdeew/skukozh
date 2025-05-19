@@ -43,6 +43,22 @@ func TestCLI(t *testing.T) {
 	defer os.Remove("skukozh_file_list.txt")
 	defer os.Remove("skukozh_result.txt")
 
+	// Create a .gitignore file
+	gitignoreContent := "*.log\nignored_file.txt"
+	gitignorePath := filepath.Join(testDir, ".gitignore")
+	if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
+		t.Fatalf("Failed to create .gitignore file: %v", err)
+	}
+
+	// Create a file that should be ignored by .gitignore
+	ignoredFile := filepath.Join(testDir, "ignored_file.txt")
+	if err := os.WriteFile(ignoredFile, []byte("should be ignored"), 0644); err != nil {
+		t.Fatalf("Failed to create gitignore test file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(testDir, "test.log"), []byte("log file"), 0644); err != nil {
+		t.Fatalf("Failed to create gitignore test log file: %v", err)
+	}
+
 	tests := []struct {
 		name          string
 		args          []string
@@ -76,6 +92,13 @@ func TestCLI(t *testing.T) {
 		{
 			name:        "Find command with no-ignore flag",
 			args:        []string{"skukozh", "-no-ignore", "find", testDir},
+			expectedOut: "File list saved to",
+			expectFile:  "skukozh_file_list.txt",
+			expectCode:  0,
+		},
+		{
+			name:        "Find command with hidden flag",
+			args:        []string{"skukozh", "-hidden", "find", testDir},
 			expectedOut: "File list saved to",
 			expectFile:  "skukozh_file_list.txt",
 			expectCode:  0,
