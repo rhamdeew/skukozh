@@ -2,11 +2,11 @@ package main
 
 import (
 	"flag"
+	"github.com/stretchr/testify/suite"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
-	"path/filepath"
-	"github.com/stretchr/testify/suite"
 )
 
 func TestCLI(t *testing.T) {
@@ -60,13 +60,13 @@ func TestCLI(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		args          []string
-		expectedOut   string
+		name           string
+		args           []string
+		expectedOut    string
 		notExpectedOut string // String that should NOT be in the output
-		expectFile    string
-		expectCode    int
-		setupRequired func(t *testing.T) // Function to run before the test
+		expectFile     string
+		expectCode     int
+		setupRequired  func(t *testing.T) // Function to run before the test
 	}{
 		{
 			name:        "No arguments shows usage",
@@ -111,11 +111,11 @@ func TestCLI(t *testing.T) {
 			expectCode:  0,
 		},
 		{
-			name:          "Find command with nonexistent directory",
-			args:          []string{"skukozh", "find", "/nonexistent/directory"},
-			expectedOut:   "Error walking directory",
-			expectFile:    "",
-			expectCode:    0,
+			name:        "Find command with nonexistent directory",
+			args:        []string{"skukozh", "find", "/nonexistent/directory"},
+			expectedOut: "Error walking directory",
+			expectFile:  "",
+			expectCode:  0,
 			setupRequired: func(t *testing.T) {
 				// Replace os.Exit to prevent actual exit
 				originalOsExit := osExit
@@ -297,10 +297,10 @@ func TestFlagIsolation(t *testing.T) {
 // Add a suite-based test to demonstrate testify suite functionality
 type CLISuite struct {
 	suite.Suite
-	testDir        string
-	cleanupFunc    func()
-	originalArgs   []string
-	originalFlags  *flag.FlagSet
+	testDir       string
+	cleanupFunc   func()
+	originalArgs  []string
+	originalFlags *flag.FlagSet
 }
 
 func (s *CLISuite) SetupSuite() {

@@ -2,13 +2,13 @@ package main
 
 import (
 	"flag"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestContains(t *testing.T) {
@@ -164,64 +164,64 @@ func TestFindFiles(t *testing.T) {
 
 	// Create local variables for flags instead of using global ones
 	tests := []struct {
-		name           string
-		supportedExts  []string
-		noIgnoreValue  bool
-		hiddenValue    bool
-		expectedCount  int
-		expectedPrefix string
-		shouldContain  []string
+		name             string
+		supportedExts    []string
+		noIgnoreValue    bool
+		hiddenValue      bool
+		expectedCount    int
+		expectedPrefix   string
+		shouldContain    []string
 		shouldNotContain []string
 	}{
 		{
-			name:          "Default behavior",
-			supportedExts: []string{},
-			noIgnoreValue: false,
-			hiddenValue:   false,
-			expectedCount: 5,
-			expectedPrefix: "",
+			name:             "Default behavior",
+			supportedExts:    []string{},
+			noIgnoreValue:    false,
+			hiddenValue:      false,
+			expectedCount:    5,
+			expectedPrefix:   "",
 			shouldNotContain: []string{"ignoreme.txt", "test.log", "ignored_dir/file.txt"},
 		},
 		{
-			name:          "No ignore",
-			supportedExts: []string{},
-			noIgnoreValue: true,
-			hiddenValue:   false,
-			expectedCount: 9,
-			expectedPrefix: "",
+			name:             "No ignore",
+			supportedExts:    []string{},
+			noIgnoreValue:    true,
+			hiddenValue:      false,
+			expectedCount:    9,
+			expectedPrefix:   "",
 			shouldNotContain: []string{"ignoreme.txt", "test.log", "ignored_dir/file.txt"},
 		},
 		{
-			name:          "Hidden flag enabled",
-			supportedExts: []string{},
-			noIgnoreValue: false,
-			hiddenValue:   true,
-			expectedCount: 12,
+			name:           "Hidden flag enabled",
+			supportedExts:  []string{},
+			noIgnoreValue:  false,
+			hiddenValue:    true,
+			expectedCount:  12,
 			expectedPrefix: "",
-			shouldContain: []string{"ignoreme.txt", "test.log", "ignored_dir/file.txt", "ignored_dir/keep.txt"},
+			shouldContain:  []string{"ignoreme.txt", "test.log", "ignored_dir/file.txt", "ignored_dir/keep.txt"},
 		},
 		{
-			name:          "Go files only",
-			supportedExts: []string{".go"},
-			noIgnoreValue: false,
-			hiddenValue:   false,
-			expectedCount: 2,
-			expectedPrefix: "",
-		},
-		{
-			name:          "Multiple extensions",
-			supportedExts: []string{".go", ".js"},
-			noIgnoreValue: false,
-			hiddenValue:   false,
-			expectedCount: 3,
+			name:           "Go files only",
+			supportedExts:  []string{".go"},
+			noIgnoreValue:  false,
+			hiddenValue:    false,
+			expectedCount:  2,
 			expectedPrefix: "",
 		},
 		{
-			name:          "No matching files",
-			supportedExts: []string{".c"},
-			noIgnoreValue: false,
-			hiddenValue:   false,
-			expectedCount: 0,
+			name:           "Multiple extensions",
+			supportedExts:  []string{".go", ".js"},
+			noIgnoreValue:  false,
+			hiddenValue:    false,
+			expectedCount:  3,
+			expectedPrefix: "",
+		},
+		{
+			name:           "No matching files",
+			supportedExts:  []string{".c"},
+			noIgnoreValue:  false,
+			hiddenValue:    false,
+			expectedCount:  0,
 			expectedPrefix: "",
 		},
 	}
