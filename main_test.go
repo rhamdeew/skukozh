@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"github.com/stretchr/testify/assert"
@@ -133,19 +134,96 @@ func TestFindFiles(t *testing.T) {
 		t.Fatalf("Failed to create file in vendor directory: %v", err)
 	}
 
+	// Create a .gitignore file with some patterns
+	gitignoreContent := "ignoreme.txt\n*.log\nignored_dir/\n!ignored_dir/keep.txt"
+	gitignorePath := filepath.Join(testDir, ".gitignore")
+	if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
+		t.Fatalf("Failed to create .gitignore file: %v", err)
+	}
+
+	// Create files that should be ignored by .gitignore
+	if err := os.WriteFile(filepath.Join(testDir, "ignoreme.txt"), []byte("should be ignored"), 0644); err != nil {
+		t.Fatalf("Failed to create gitignore test file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(testDir, "test.log"), []byte("log file"), 0644); err != nil {
+		t.Fatalf("Failed to create gitignore test log file: %v", err)
+	}
+
+	// Create a directory that should be ignored
+	ignoredDir := filepath.Join(testDir, "ignored_dir")
+	if err := os.MkdirAll(ignoredDir, 0755); err != nil {
+		t.Fatalf("Failed to create ignored directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(ignoredDir, "file.txt"), []byte("should be ignored"), 0644); err != nil {
+		t.Fatalf("Failed to create file in ignored directory: %v", err)
+	}
+	// Create a file that should NOT be ignored due to gitignore negation
+	if err := os.WriteFile(filepath.Join(ignoredDir, "keep.txt"), []byte("should be kept"), 0644); err != nil {
+		t.Fatalf("Failed to create kept file in ignored directory: %v", err)
+	}
+
 	// Create local variables for flags instead of using global ones
 	tests := []struct {
 		name           string
 		supportedExts  []string
 		noIgnoreValue  bool
+		hiddenValue    bool
 		expectedCount  int
 		expectedPrefix string
+		shouldContain  []string
+		shouldNotContain []string
 	}{
-		{"Default behavior", []string{}, false, 5, ""}, // Finds .go, .js, .php, .txt but not hidden files or binary files
-		{"No ignore", []string{}, true, 9, ""}, // Should find all files including hidden, binary, and package files
-		{"Go files only", []string{".go"}, false, 2, ""},
-		{"Multiple extensions", []string{".go", ".js"}, false, 3, ""},
-		{"No matching files", []string{".c"}, false, 0, ""},
+		{
+			name:          "Default behavior",
+			supportedExts: []string{},
+			noIgnoreValue: false,
+			hiddenValue:   false,
+			expectedCount: 5,
+			expectedPrefix: "",
+			shouldNotContain: []string{"ignoreme.txt", "test.log", "ignored_dir/file.txt"},
+		},
+		{
+			name:          "No ignore",
+			supportedExts: []string{},
+			noIgnoreValue: true,
+			hiddenValue:   false,
+			expectedCount: 9,
+			expectedPrefix: "",
+			shouldNotContain: []string{"ignoreme.txt", "test.log", "ignored_dir/file.txt"},
+		},
+		{
+			name:          "Hidden flag enabled",
+			supportedExts: []string{},
+			noIgnoreValue: false,
+			hiddenValue:   true,
+			expectedCount: 12,
+			expectedPrefix: "",
+			shouldContain: []string{"ignoreme.txt", "test.log", "ignored_dir/file.txt", "ignored_dir/keep.txt"},
+		},
+		{
+			name:          "Go files only",
+			supportedExts: []string{".go"},
+			noIgnoreValue: false,
+			hiddenValue:   false,
+			expectedCount: 2,
+			expectedPrefix: "",
+		},
+		{
+			name:          "Multiple extensions",
+			supportedExts: []string{".go", ".js"},
+			noIgnoreValue: false,
+			hiddenValue:   false,
+			expectedCount: 3,
+			expectedPrefix: "",
+		},
+		{
+			name:          "No matching files",
+			supportedExts: []string{".c"},
+			noIgnoreValue: false,
+			hiddenValue:   false,
+			expectedCount: 0,
+			expectedPrefix: "",
+		},
 	}
 
 	for _, tc := range tests {
@@ -154,16 +232,19 @@ func TestFindFiles(t *testing.T) {
 			// Clean up previous test file
 			os.Remove("skukozh_file_list.txt")
 
-			// Store original noIgnore value and restore it at the end of the test
+			// Store original flag values and restore them at the end of the test
 			flagMutex.Lock()
 			originalNoIgnoreValue := *noIgnore
+			originalHiddenValue := *hidden
 			*noIgnore = tc.noIgnoreValue
+			*hidden = tc.hiddenValue
 			flagMutex.Unlock()
 
 			// Make sure we restore it when we're done
 			defer func() {
 				flagMutex.Lock()
 				*noIgnore = originalNoIgnoreValue
+				*hidden = originalHiddenValue
 				flagMutex.Unlock()
 			}()
 
@@ -173,6 +254,9 @@ func TestFindFiles(t *testing.T) {
 				t.Fatalf("findFilesInternal returned error: %v", err)
 			}
 
+			// Sort files for consistent debugging
+			sort.Strings(files)
+
 			// Write files to test output
 			if len(files) > 0 {
 				fileContent := strings.Join(files, "\n")
@@ -181,15 +265,44 @@ func TestFindFiles(t *testing.T) {
 				}
 			}
 
+			// Debug: Print complete alphabetical list of files
+			if tc.name == "Hidden flag enabled" {
+				t.Logf("Alphabetical file list for hidden flag test: %s", strings.Join(files, ", "))
+				t.Logf("Files count: %d, Expected: %d", len(files), tc.expectedCount)
+			}
+
 			// Check if the expected number of files was found
 			if len(files) != tc.expectedCount {
-				t.Logf("With noIgnore=%v, found %d files: %v", tc.noIgnoreValue, len(files), files)
+				t.Logf("With noIgnore=%v, hidden=%v, found %d files: %v", tc.noIgnoreValue, tc.hiddenValue, len(files), files)
 				t.Errorf("Expected %d files, got %d.", tc.expectedCount, len(files))
 			}
 
 			for _, file := range files {
 				if tc.expectedPrefix != "" && !strings.HasPrefix(file, tc.expectedPrefix) {
 					t.Errorf("File path does not start with expected prefix: %s", file)
+				}
+			}
+
+			// Check if the files that should be present are included
+			for _, expected := range tc.shouldContain {
+				found := false
+				for _, file := range files {
+					if file == expected {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected to find file '%s' but it was not included", expected)
+				}
+			}
+
+			// Check if the files that should not be present are excluded
+			for _, notExpected := range tc.shouldNotContain {
+				for _, file := range files {
+					if file == notExpected {
+						t.Errorf("File '%s' should not be included but was found", notExpected)
+					}
 				}
 			}
 		})

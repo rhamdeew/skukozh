@@ -2,7 +2,11 @@
 
 A command-line tool to find and extract content from files in a directory. The tool is particularly useful for preparing code files for analysis by AI models like Claude or GPT.
 
-![CI/CD Status](https://github.com/rhamdeew/skukozh/actions/workflows/build.yml/badge.svg)
+![CI/CD Status](https://github.com/rhamdeew/skukozh/actions/workflows/release.yml/badge.svg)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/rhamdeew/skukozh)](https://github.com/rhamdeew/skukozh/releases/latest)
+[![GitHub license](https://img.shields.io/github/license/rhamdeew/skukozh)](https://github.com/rhamdeew/skukozh/blob/main/LICENSE)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rhamdeew/skukozh)](https://goreportcard.com/report/github.com/rhamdeew/skukozh)
+[![GitHub stars](https://img.shields.io/github/stars/rhamdeew/skukozh)](https://github.com/rhamdeew/skukozh/stargazers)
 
 ## Features
 
@@ -15,6 +19,8 @@ A command-line tool to find and extract content from files in a directory. The t
 - Supports both long and short command formats
 - Automatically ignores hidden files, binary files, and third-party package directories
 - Supports verbose mode for detailed operation logging
+- Respects .gitignore rules when finding files
+- Provides options to override ignore patterns when needed
 
 ## Usage
 
@@ -37,6 +43,9 @@ To find files with specific extensions and create a file list:
 
 # Include hidden and binary files (normally ignored by default)
 ./skukozh -no-ignore f /path/to/directory
+
+# Include all files and override .gitignore rules
+./skukozh -hidden f /path/to/directory
 
 # Show detailed output during file discovery
 ./skukozh -verbose f /path/to/directory
@@ -168,6 +177,7 @@ Long Format | Short Format | Description
 `analyze` | `a` | Analyze result file
 `--ext` | - | Specify file extensions
 `--no-ignore` | - | Include hidden files, binary files, and package directories
+`--hidden` | - | Include all files and override .gitignore rules
 `--verbose` | - | Show detailed output during operation
 
 ## Ignore Patterns
@@ -176,8 +186,10 @@ By default, skukozh ignores:
 - Hidden files and directories (starting with `.`)
 - Binary files (common image, audio, video formats, etc.)
 - Third-party package directories (`node_modules`, `vendor`, `dist`, etc.)
+- Any files or directories specified in .gitignore files
 
-Use the `-no-ignore` flag to include all files.
+Use the `-no-ignore` flag to include common ignored files and directories, but still respect .gitignore rules.
+Use the `-hidden` flag to include all files and override .gitignore rules completely.
 
 ## Special Thanks
 
